@@ -1,33 +1,97 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Chat Grupal</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chat Grupal</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+
+    header {
+      background-color: #333;
+      color: #fff;
+      padding: 10px 0;
+      text-align: center;
+    }
+
+    #loginSection, #chatSection {
+      max-width: 600px;
+      margin: 20px auto;
+      padding: 20px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      background-color: #f9f9f9;
+    }
+
+    #chatSection {
+      display: none;
+    }
+
+    input[type="text"], input[type="password"], button {
+      display: block;
+      margin: 10px 0;
+      padding: 8px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    button {
+      background-color: #333;
+      color: #fff;
+      border: none;
+      cursor: pointer;
+    }
+
+    #groupsContainer {
+      margin-top: 20px;
+    }
+
+    #chat {
+      margin-top: 20px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      padding: 10px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    #chat div {
+      margin-bottom: 5px;
+    }
+  </style>
 </head>
 <body>
-<div id="loginSection">
-  <h1>Chat Grupal</h1>
-  <!-- Formulario de inicio de sesión -->
-  <form id="loginForm">
-    <input type="text" id="usernameInput" placeholder="Nombre de usuario...">
-    <input type="password" id="passwordInput" placeholder="Contraseña...">
-    <button type="submit">Iniciar sesión</button>
-  </form>
-</div>
+  <header>
+    <h1>Chat Grupal</h1>
+  </header>
 
-<div id="chatSection" style="display:none;">
-  <!-- Resto del código de chat -->
-  <input type="text" id="channelInput" placeholder="Nombre del canal...">
-  <input type="text" id="messageInput" placeholder="Escribe un mensaje...">
-  <button onclick="unirse()">Unirse al canal</button>
-  <button onclick="crearcanal()">Crear canal</button>
-  <button onclick="enviar()">Enviar</button>
-  <div id="groupsContainer"></div>
-  <div id="chat"></div>
-</div>
+  <div id="loginSection">
+    <h2>Iniciar Sesión</h2>
+    <!-- Formulario de inicio de sesión -->
+    <form id="loginForm">
+      <input type="text" id="usernameInput" placeholder="Nombre de usuario...">
+      <input type="password" id="passwordInput" placeholder="Contraseña...">
+      <button type="submit">Iniciar sesión</button>
+    </form>
+  </div>
 
-<script>
+  <div id="chatSection">
+    <h2>Chat</h2>
+    <!-- Sección de chat -->
+    <input type="text" id="channelInput" placeholder="Nombre del canal...">
+    <input type="text" id="messageInput" placeholder="Escribe un mensaje...">
+    <button onclick="unirse()">Unirse al canal</button>
+    <button onclick="crearcanal()">Crear canal</button>
+    <button onclick="enviar()">Enviar</button>
+    <div id="groupsContainer"></div>
+    <div id="chat"></div>
+  </div>
+
+  <script>
 const socket = new WebSocket("ws://192.168.13.11:4000");
 let currentChannel = null;
 
@@ -81,9 +145,10 @@ function crearcanal() {
 function enviar() {
   const messageInput = document.getElementById("messageInput");
   const message = messageInput.value.trim();
+  const usernameInput = document.getElementById("usernameInput").value.trim();
 
   if (message !== "" && currentChannel) {
-    const messageData = { action: "message", channelName: currentChannel, message };
+    const messageData = { action: "message", channelName: currentChannel, username: usernameInput, message };
     const messageString = JSON.stringify(messageData);
     socket.send(messageString);
     messageInput.value = "";

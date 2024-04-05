@@ -27,13 +27,13 @@ server.on("connection", (socket) => {
     try {
       const messageData = JSON.parse(data);
       const { action, channelName, message, username, password, userId } = messageData;
-
+      console.log(messageData);
       if (action === "join") {
         joinChannel(socket, channelName);
       } else if (action === "create") {
         createChannel(socket, channelName, userId);
       } else if (action === "message" && channelName) {
-        sendMessageToChannel(channelName, username, message);
+        sendMessageToChannel(socket, channelName, username, message);
       } else if (action === "login") {
         validarlogin(socket, username, password);
       }
@@ -84,8 +84,7 @@ function validarlogin(socket, username, password) {
 }
 
 function joinChannel(socket, channelName) {
-  const sql3 = ` `
-  const sql = `SELECT * FROM grupos WHERE groupname = ?`;
+  const sql = `SELECT id_grupo FROM grupos WHERE groupname = ?`;
   con.query(sql, [channelName], (err, result) => {
     if (err) {
       console.error("Error al unirse al canal:", err);
@@ -94,46 +93,102 @@ function joinChannel(socket, channelName) {
     }
 
     if (result.length > 0) {
-      // Aquí puedes realizar acciones adicionales, como agregar el socket al canal, etc.
-      console.log(`Cliente unido al canal '${channelName}'`);
+      const groupId = result[0].id_grupo;
+      socket.groupId = groupId; 
+      console.log(`Cliente unido al canal '${channelName}' con ID de grupo ${groupId}`);
       socket.send(`info:Te has unido al canal '${channelName}'`);
     } else {
       socket.send(`alert:El canal '${channelName}' no existe`);
     }
-  });
+  });  
 }
+
 
 function createChannel(socket, channelName) {
   const userId = socket.userId;
-  console.log(userId);
-  const sql = `INSERT INTO grupos (groupname, id_usuario) VALUES (?, ?)`;
-  con.query(sql, [channelName, userId], (err, result) => {
+
+  // Obtener el rol actual del usuario
+  const sqlSelect = `SELECT rol FROM usuarios WHERE id_usuario = ?`;
+  con.query(sqlSelect, [userId], (err, selectResult) => {
     if (err) {
-      console.error("Error al crear el canal:", err);
-      socket.send(`alert:Error al crear el canal`);
+      console.error("Error al obtener el rol del usuario:", err);
+      socket.send(`alert:Error al obtener el rol del usuario`);
       return;
     }
 
-    console.log(`Canal '${channelName}' creado`);
-    socket.send(`info:Canal '${channelName}' creado`);
+    if (selectResult.length > 0) {
+      const userol = selectResult[0].rol;
+      console.log(`Rol actual del usuario ID ${userId}: ${userol}`);
+
+      // Verificar si el rol actual es 0 (usuario normal) antes de actualizar a administrador
+      if (userol === 0) {
+        const sqlInsert = `INSERT INTO grupos (groupname, id_usuario) VALUES (?, ?)`;
+        con.query(sqlInsert, [channelName, userId], (err, result) => {
+          if (err) {
+            console.error("Error al crear el canal:", err);
+            socket.send(`alert:Error al crear el canal`);
+            return;
+          }
+
+          console.log(`Canal '${channelName}' creado`);
+          socket.send(`info:Canal '${channelName}' creado`);
+        
+          const sqlUpdate = `UPDATE usuarios SET rol = 1 WHERE id_usuario = ?`;
+          con.query(sqlUpdate, [userId], (err, updateResult) => {
+            if (err) {
+              console.error("Error al actualizar el rol del usuario:", err);
+              return;
+            }
+            console.log(`Rol actualizado a administrador para el usuario ID: ${userId}`);
+          });
+        });
+      } else {
+        console.log(`El usuario ID ${userId} ya es administrador`);
+        // Puedes enviar un mensaje al cliente indicando que ya es administrador
+        socket.send(`alert:Ya eres administrador`);
+      }
+    } else {
+      console.log(`No se encontró al usuario ID ${userId}`);
+      // Puedes enviar un mensaje al cliente indicando que el usuario no existe
+      socket.send(`alert:Usuario no encontrado`);
+    }
   });
 }
 
-
-function sendMessageToChannel(channelName, message) {
+function sendMessageToChannel(socket, channelName, username, message) {
+  const groupId = socket.groupId;
   const sql = `SELECT * FROM grupos WHERE groupname = ?`;
   con.query(sql, [channelName], (err, result) => {
     if (err) {
       console.error("Error al enviar mensaje al canal:", err);
       return;
     }
-
+    
     if (result.length > 0) {
-      // Aquí puedes enviar el mensaje a todos los sockets en el canal, similar a cómo lo hacías antes.
+      const formattedMessage = `Mensaje de ${username}: ${message}`;
+      
+      // Recorrer todos los clientes conectados al WebSocket y enviar el mensaje
+      server.clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(formattedMessage);
+          console.log(formattedMessage);
+        }
+      });
     } else {
       console.log(`El canal '${channelName}' no existe`);
     }
   });
+  const userId = socket.userId
+  const insertu = `INSERT INTO mensajes (id_usuario, id_grupo, mensaje) VALUES (?, ?, ?)`;
+  con.query(insertu, [userId, groupId, message], (err, result) => {
+    if (err) {
+      console.error("Error al insertar mensaje en la base de datos:", err);
+      return;
+    }
+  
+    console.log("Mensaje insertado correctamente en la base de datos");
+  });
+  
 }
 
 console.log('WebSocket conectado en el puerto 4000');
