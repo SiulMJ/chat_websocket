@@ -31,7 +31,7 @@
       display: none;
     }
 
-    input[type="text"], input[type="password"], button {
+    input[type="text"], input[type="password"], button, select {
       display: block;
       margin: 10px 0;
       padding: 8px;
@@ -82,109 +82,108 @@
   <div id="chatSection">
     <h2>Chat</h2>
     <!-- Sección de chat -->
-    <input type="text" id="channelInput" placeholder="Nombre del canal...">
+    <select id="channelSelect" onchange="unirseAutomatically()"></select>
     <input type="text" id="messageInput" placeholder="Escribe un mensaje...">
-    <button onclick="unirse()">Unirse al canal</button>
     <button onclick="crearcanal()">Crear canal</button>
     <button onclick="enviar()">Enviar</button>
-    <div id="groupsContainer"></div>
     <div id="chat"></div>
   </div>
 
   <script>
-const socket = new WebSocket("ws://192.168.13.11:4000");
-let currentChannel = null;
+    const socket = new WebSocket("ws://192.168.1.73:4000");
+    let currentChannel = null;
 
-socket.onopen = () => {
-  console.log("Conectado al servidor WebSocket");
-};
+    socket.onopen = () => {
+      console.log("Conectado al servidor WebSocket");
+    };
 
-socket.onmessage = (event) => {
-  const message = event.data;
-  if (message.startsWith("alert:")) {
-    const errorMessage = message.substring(6); 
-    alert(errorMessage);
-  } else if (message.startsWith("info:Inicio de sesión exitoso")) {
+    socket.onmessage = (event) => {
+      const message = event.data;
+      if (message.startsWith("alert:")) {
+        const errorMessage = message.substring(6); 
+        alert(errorMessage);
+      } else if (message.startsWith("info:Inicio de sesión exitoso")) {
 
-    document.getElementById("loginSection").style.display = "none";
-    document.getElementById("chatSection").style.display = "block";
-  } else if (message.startsWith("groups:")) {
-    const groupsData = JSON.parse(message.substring(7));
-    displayGroups(groupsData);
-  } else {
-    appendMessage(message);
-  }
-};
+        document.getElementById("loginSection").style.display = "none";
+        document.getElementById("chatSection").style.display = "block";
+      } else if (message.startsWith("groups:")) {
+        const groupsData = JSON.parse(message.substring(7));
+        displayGroups(groupsData);
+      } else {
+        appendMessage(message);
+      }
+    };
 
-socket.onclose = () => {
-  console.log("Conexión WebSocket cerrada");
-};
+    socket.onclose = () => {
+      console.log("Conexión WebSocket cerrada");
+    };
 
-function unirse() {
-  const channelInput = document.getElementById("channelInput");
-  const channelName = channelInput.value.trim();
+    function unirseAutomatically() {
+      const channelSelect = document.getElementById("channelSelect");
+      const selectedChannelIndex = channelSelect.selectedIndex;
+      const selectedChannel = channelSelect.options[selectedChannelIndex].value;
 
-  if (channelName !== "") {
-    const message = JSON.stringify({ action: "join", channelName });
-    socket.send(message);
-    currentChannel = channelName;
-  }
-}
+      if (selectedChannel !== "") {
+        const message = JSON.stringify({ action: "join", channelName: selectedChannel });
+        socket.send(message);
+        currentChannel = selectedChannel;
+      }
+    }
 
-function crearcanal() {
-  const channelInput = document.getElementById("channelInput");
-  const channelName = channelInput.value.trim();
+    function crearcanal() {
+      const channelSelect = document.getElementById("channelSelect");
+      const channelName = prompt("Ingrese el nombre del nuevo canal:");
 
-  if (channelName !== "") {
-    const message = JSON.stringify({ action: "create", channelName });
-    socket.send(message);
-    currentChannel = channelName;
-  }
-}
+      if (channelName !== null && channelName.trim() !== "") {
+        const message = JSON.stringify({ action: "create", channelName });
+        socket.send(message);
+        currentChannel = channelName;
+      }
+    }
 
-function enviar() {
-  const messageInput = document.getElementById("messageInput");
-  const message = messageInput.value.trim();
-  const usernameInput = document.getElementById("usernameInput").value.trim();
+    function enviar() {
+      const messageInput = document.getElementById("messageInput");
+      const message = messageInput.value.trim();
+      const usernameInput = document.getElementById("usernameInput").value.trim();
 
-  if (message !== "" && currentChannel) {
-    const messageData = { action: "message", channelName: currentChannel, username: usernameInput, message };
-    const messageString = JSON.stringify(messageData);
-    socket.send(messageString);
-    messageInput.value = "";
-  }
-}
+      if (message !== "" && currentChannel) {
+        const messageData = { action: "message", channelName: currentChannel, username: usernameInput, message };
+        const messageString = JSON.stringify(messageData);
+        socket.send(messageString);
+        messageInput.value = "";
+      }
+    }
 
-function appendMessage(message) {
-  const chatContainer = document.getElementById("chat");
-  const messageElement = document.createElement("div");
-  messageElement.textContent = message;
-  chatContainer.appendChild(messageElement);
-}
+    function appendMessage(message) {
+      const chatContainer = document.getElementById("chat");
+      const messageElement = document.createElement("div");
+      messageElement.textContent = message;
+      chatContainer.appendChild(messageElement);
+    }
 
-// Manejar el evento de envío del formulario de inicio de sesión
-document.getElementById("loginForm").addEventListener("submit", function(event) {
-  event.preventDefault(); // Evita que el formulario se envíe de forma predeterminada
+    // Manejar el evento de envío del formulario de inicio de sesión
+    document.getElementById("loginForm").addEventListener("submit", function(event) {
+      event.preventDefault(); // Evita que el formulario se envíe de forma predeterminada
 
-  const usernameInput = document.getElementById("usernameInput").value.trim();
-  const passwordInput = document.getElementById("passwordInput").value.trim();
+      const usernameInput = document.getElementById("usernameInput").value.trim();
+      const passwordInput = document.getElementById("passwordInput").value.trim();
 
-  // Enviar datos de inicio de sesión al servidor a través del WebSocket
-  const loginData = JSON.stringify({ action: "login", username: usernameInput, password: passwordInput });
-  socket.send(loginData);
-});
+      // Enviar datos de inicio de sesión al servidor a través del WebSocket
+      const loginData = JSON.stringify({ action: "login", username: usernameInput, password: passwordInput });
+      socket.send(loginData);
+    });
 
-function displayGroups(groupsData) {
-  const groupsContainer = document.getElementById("groupsContainer");
-  groupsContainer.innerHTML = '';
+    function displayGroups(groupsData) {
+      const channelSelect = document.getElementById("channelSelect");
+      channelSelect.innerHTML = '<option value="">Seleccione un canal...</option>';
 
-  groupsData.forEach(group => {
-    const groupElement = document.createElement('div');
-    groupElement.textContent = `grupos disponibles: ${group.groupname}`;
-    groupsContainer.appendChild(groupElement);
-  });
-}
-
-</script>
+      groupsData.forEach(group => {
+        const option = document.createElement('option');
+        option.value = group.groupname;
+        option.textContent = group.groupname;
+        channelSelect.appendChild(option);
+      });
+    }
+  </script>
 </body>
 </html>
