@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chat Grupal</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+
+    header {
+      background-color: #333;
+      color: #fff;
+      padding: 10px 0;
+      text-align: center;
+    }
+
+    #loginSection, #chatSection {
+      max-width: 600px;
+      margin: 20px auto;
+      padding: 20px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      background-color: #f9f9f9;
+    }
+
+    #chatSection {
+      display: none;
+    }
+
+    input[type="text"], input[type="password"], button, select {
+      display: block;
+      margin: 10px 0;
+      padding: 8px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    button {
+      background-color: #333;
+      color: #fff;
+      border: none;
+      cursor: pointer;
+    }
+
+    #groupsContainer {
+      margin-top: 20px;
+    }
+
+    #chat {
+      margin-top: 20px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      padding: 10px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    #chat div {
+      margin-bottom: 5px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Chat Grupal</h1>
+  </header>
+
+  <div id="loginSection">
+    <h2>Iniciar Sesión</h2>
+    <!-- Formulario de inicio de sesión -->
+    <form id="loginForm">
+      <input type="text" id="usernameInput" placeholder="Nombre de usuario...">
+      <input type="password" id="passwordInput" placeholder="Contraseña...">
+      <button type="submit">Iniciar sesión</button>
+    </form>
+  </div>
+
+  <div id="chatSection">
+    <h2>Chat</h2>
+    <!-- Sección de chat -->
+
+    <select id="channelSelect" onchange="unirseAutomatically()"></select>
+    <input type="text" id="messageInput" placeholder="Escribe un mensaje...">
+    <button onclick="crearcanal()">Crear canal</button>
+    <button onclick="enviar()">Enviar</button>
+    <div id = "switchbottons">
+      <button onclick="mostrarUsuarios()">mostrar usuarios</button>
+      <button onclick="agregarUsuarios()">Agregar usuarios</button>
+      <button onclick="eliminar()">Eliminar grupos</button>
+    </div>
+    <div id="chat"></div>
+    <!-- Nuevo select múltiple para mostrar usuarios -->
+    <select id="usuariosSelect" multiple style="display: none;"></select>
+  </div>
+
+  <script>
+    const socket = new WebSocket("ws://192.168.13.105:4000");
+    let currentChannel = null;
+
+    socket.onopen = () => {
+      console.log("Conectado al servidor WebSocket");
+    };
+
+// Dentro del evento socket.onmessage
+socket.onmessage = (event) => {
+  const message = event.data;
+  if (message.startsWith("alert:")) {
+    const errorMessage = message.substring(6); 
+    alert(errorMessage);
+  } else if (message.startsWith("info:Inicio de sesión exitoso")) {
+    document.getElementById("loginSection").style.display = "none";
+    document.getElementById("chatSection").style.display = "block";
+  } else if (message.startsWith("groups:")) {
+    const groupsData = JSON.parse(message.substring(7));
+    displayGroups(groupsData);
+  } else if (message.startsWith("users:")) {
+    const userNamesData = JSON.parse(message.substring(6));
+    mostrarSelectUsuarios(userNamesData.users);
+  } else if (message.startsWith("info:") || message.startsWith("mensaje:")) {
+    const messageContent = message.substring(message.indexOf(":") + 1);
+    appendMessage(messageContent);
+  } else if (message.startsWith("delete:")) {
+    const channelToDelete = message.substring(7);
+    // Eliminar el grupo de la lista de canales en la interfaz
+    const channelSelect = document.getElementById("channelSelect");
+    const options = channelSelect.options;
+    for (let i = 0; i < options.length; i++) {
+      if (options[i].value === channelToDelete) {
+        channelSelect.remove(i);
+      }
+    }
+ } else {
+    appendMessage(message);
+  }
+};
+    socket.onclose = () => {
+      console.log("Conexión WebSocket cerrada");
+    };
+
+    function unirseAutomatically() {
+      const channelSelect = document.getElementById("channelSelect");
+      const selectedChannelIndex = channelSelect.selectedIndex;
+      const selectedChannel = channelSelect.options[selectedChannelIndex].value;
+      const chatContainer = document.getElementById("chat");
+      chatContainer.innerHTML = "";
+
+      if (selectedChannel !== "") {
+        const message = JSON.stringify({ action: "join", channelName: selectedChannel });
+        socket.send(message);
+        currentChannel = selectedChannel;
+      }
+    }
+
+    function crearcanal() {
+      const channelSelect = document.getElementById("channelSelect");
+      const channelName = prompt("Ingrese el nombre del nuevo canal:");
+
+      if (channelName !== null && channelName.trim() !== "" ) {
+        const message = JSON.stringify({ action: "create", channelName }); 
+        socket.send(message);
+        currentChannel = channelName;
+      }
+    }
+
+    function enviar() {
+      const messageInput = document.getElementById("messageInput");
+      const message = messageInput.value.trim();
+      const usernameInput = document.getElementById("usernameInput").value.trim();
+
+      if (message !== "" && currentChannel) {
+        const messageData = { action: "message", channelName: currentChannel, username: usernameInput, message };
+        const messageString = JSON.stringify(messageData);
+        socket.send(messageString);
+        messageInput.value = "";
+      }
+    }
+
+    function mostrarUsuarios() {
+      const messageData = { action: "getUsers", channelName: currentChannel };
+      const messageString = JSON.stringify(messageData);
+      socket.send(messageString);
+    }
+
+    function mostrarSelectUsuarios(users) {
+  const usuariosSelect = document.getElementById("usuariosSelect");
+  usuariosSelect.innerHTML = ""; // Limpiar select antes de mostrar usuarios
+
+  users.forEach(user => {
+    const option = document.createElement('option');
+    option.value = user.id_usuario; // Cambiar el value a la ID del usuario
+    option.textContent = user.username;
+    usuariosSelect.appendChild(option);
+  });
+
+  usuariosSelect.style.display = "block"; // Mostrar el select múltiple de usuarios
+}
+function agregarUsuarios() {
+  const usuariosSelect = document.getElementById("usuariosSelect");
+  const selectedUsers = Array.from(usuariosSelect.selectedOptions).map(option => option.value);
+
+  if (selectedUsers.length > 0) {
+    // Convertir el array de usuarios a una cadena separada por comas
+    const selectedUsersString = selectedUsers.join(',');
+    const messageData = { action: "addUsersToDatabase", selectedUsers: selectedUsersString };
+    const messageString = JSON.stringify(messageData);
+    socket.send(messageString);
+  } else {
+    alert("Selecciona al menos un usuario para agregar a la base de datos.");
+  }
+}
+
+function eliminar() {
+  if (currentChannel) {
+    const confirmDelete = confirm("¿Estás seguro de que quieres eliminar este grupo?");
+    if (confirmDelete) {
+      const message = JSON.stringify({ action: "delete", channelName: currentChannel });
+      socket.send(message);
+    }
+  } else {
+    alert("Selecciona un grupo antes de eliminarlo.");
+  }
+}
+
+
+    function appendMessage(message) {
+      const chatContainer = document.getElementById("chat");
+      const messageElement = document.createElement("div");
+      messageElement.textContent = message;
+      chatContainer.appendChild(messageElement);
+    }
+
+    // Manejar el evento de envío del formulario de inicio de sesión
+    document.getElementById("loginForm").addEventListener("submit", function(event) {
+      event.preventDefault(); // Evita que el formulario se envíe de forma predeterminada
+
+      const usernameInput = document.getElementById("usernameInput").value.trim();
+      const passwordInput = document.getElementById("passwordInput").value.trim();
+
+      // Enviar datos de inicio de sesión al servidor a través del WebSocket
+      const loginData = JSON.stringify({ action: "login", username: usernameInput, password: passwordInput });
+      socket.send(loginData);
+    });
+
+    function displayGroups(groupsData) {
+      const channelSelect = document.getElementById("channelSelect");
+      channelSelect.innerHTML = '<option value="">Seleccione un canal...</option>';
+
+      groupsData.forEach(group => {
+        const option = document.createElement('option');
+        option.value = group.groupname;
+        option.textContent = group.groupname;
+        channelSelect.appendChild(option);
+      });
+    }
+  </script>
+</body>
+</html>
