@@ -26,16 +26,16 @@ server.on("connection", (socket) => {
 
     try {
       const messageData = JSON.parse(data);
-      const {  action, channelName, message, username, password, userId, userList, selectedUsers } = messageData;
+      const {  action, channelName, message, username, tag, userId, selectedUsers } = messageData;
       console.log(messageData);
       if (action === "join") {
         joinChannel(socket, channelName);
       } else if (action === "create") {
         createChannel(socket, channelName, userId);
       } else if (action === "message" && channelName) {
-        sendMessageToChannel(socket, channelName, username, message);
+        sendMessageToChannel(socket, channelName, message);
       } else if (action === "login") {
-        validarlogin(socket, username, password);
+        login(socket, username, tag);
       } else if (action === "getUsers" && channelName) {
         obtenerUsuarios(socket, channelName);
       } else if (action === "addUsersToDatabase") {
@@ -53,68 +53,64 @@ server.on("connection", (socket) => {
   });
 });
 
-function validarlogin(socket, username, password) {
-
-  const sql = `SELECT id_usuario, rol FROM usuarios WHERE username = ? AND password = ?`;
-  con.query(sql, [username, password], (err, result) => {
-    if (err) {
-      console.error("Error al validar el inicio de sesión:", err);
-      socket.send(`alert:Error al validar el inicio de sesión`);
-      return;
-    }
-
-    if (result.length > 0) {
-      const userId = result[0].id_usuario;
-      socket.userId = userId;
-      const userol = result[0].rol;
-      socket.userol = userol;
-      socket.send(`info:Inicio de sesión exitoso, ID: ${userId}`);
 
 
-       // Realizar la consulta para obtener el rol al que pertenece el usuario
-      // const sql1 = `SELECT  usuarios.rol from usuarios
-      // where id_usuario = ?`;
-      // con.query(sql1, [userId], (err, Rolresult) => {
-      //   if (err) {
-      //     console.error("Error al obtener el rol del usuario:", err);
-      //     return;
-      //   }
-      //   if (Rolresult.length > 0) {
-      //     const rol = JSON.stringify(Rolresult);
-      //     socket.send(`rol:${rol}`);
-      //   } else {
-      //     socket.send(`alert:El usuario no tiene definido un rol`);
-      //   } 
-      // });
-      
+function login(socket, username, tag) {
+      const inusu= `INSERT INTO usuarios (username,tag) values (?,?)`;
+      con.query(inusu,[username,tag], (err, result) =>{
 
-      // Realizar la consulta para obtener los grupos a los que pertenece el usuario
-      const sql2 = `SELECT  grupos.groupname from grupos
-      where grupos.id_usuario = ? or FIND_IN_SET(?, grupos.id_miembros)`;
-
-      con.query(sql2, [userId, userId], (err, groupsResult) => {
         if (err) {
-          console.error("Error al obtener los grupos del usuario:", err);
+          socket.username = username;
+          console.log("error al insertar usuario");
+          socket.tag= tag;
+          searchuser(socket);
           return;
+        } 
+        if (result.affectedRows > 0){
+          socket.username = username;
+          socket.tag = tag;
+          searchuser(socket);
         }
-        if (groupsResult.length > 0) {
-          const groupsData = JSON.stringify(groupsResult);
-          socket.send(`groups:${groupsData}`);
-          console.log(groupsData);
-        } else {
-          socket.send(`alert:El usuario no pertenece a ningún grupo`);
-        }
-      });
-    } else {
-      // Nombre de usuario o contraseña incorrectos
-      socket.send(`alert:Nombre de usuario o contraseña incorrectos`);
-    }
-  });
+      });          
 }
+
+ function searchuser(socket){
+  const tag = socket.tag;
+      const sql = `SELECT id_usuario, rol FROM usuarios WHERE tag = ?`;
+      con.query(sql, [tag], (err, result) => {
+        if (err) {
+            console.error("Error al validar el inicio de sesión:", err);
+            return;
+        }
+        if (result.length > 0) {
+          const userId = result[0].id_usuario;
+          socket.userId = userId;
+          const userol = result[0].rol;
+          socket.userol = userol;
+
+            // Realizar la consulta para obtener los grupos a los que pertenece el usuario
+            const sql2 = `SELECT  grupos.groupname from grupos
+            where grupos.id_usuario = ? or FIND_IN_SET(?, grupos.id_miembros)`;
+      
+            con.query(sql2, [userId, userId], (err, groupsResult) => {
+              if (err) {
+                console.error("Error al obtener los grupos del usuario:", err);
+                return;
+              }
+              if (groupsResult.length > 0) {
+                const groupsData = JSON.stringify(groupsResult);
+                socket.send(`groups:${groupsData}`);
+                console.log(groupsData);
+              } else {
+                socket.send(`alert:El usuario no pertenece a ningún grupo`);
+              }
+            });
+          }
+      });   
+ }
 
 function joinChannel(socket, channelName) {
   const userId = socket.userId;
-
   // Verificar si el usuario es el creador del grupo al que intenta unirse
   const sqlCheckCreator = `SELECT id_usuario FROM grupos WHERE groupname = ? AND id_usuario = ?`;
   con.query(sqlCheckCreator, [channelName, userId], (err, creatorResult) => {
@@ -252,8 +248,10 @@ function createChannel(socket, channelName) {
 }
 
 
-function sendMessageToChannel(socket, channelName, username, message) {
+function sendMessageToChannel(socket, channelName, message) {
   const groupId = socket.groupId;
+  const username = socket.username;
+  
   const sql = `SELECT * FROM grupos WHERE groupname = ?`;
   con.query(sql, [channelName], (err, result) => {
     if (err) {
@@ -290,7 +288,7 @@ function sendMessageToChannel(socket, channelName, username, message) {
 
 function obtenerUsuarios(socket, channelName) {
   const userId = socket.userId;
-  const sql = `SELECT usuarios.id_usuario, usuarios.username FROM usuarios
+  const sql = `SELECT distinct usuarios.id_usuario, usuarios.username FROM usuarios
   left join chat.grupos on grupos.id_usuario = chat.usuarios.id_usuario
   where usuarios.id_usuario != ?`;
   con.query(sql,[userId], (err, result) => {
@@ -322,6 +320,7 @@ function insertUsersToDatabase(socket, selectedUserIds) {
 
   // Convertir el string de IDs de usuarios en un array
   const userIds = selectedUserIds.split(',').map(userId => parseInt(userId.trim(), 10));
+  console.log(userIds);
 
   // Construir la consulta SQL para UD los usuarios en el grupo
   const updateQuery = "UPDATE grupos SET id_miembros = ? WHERE id_grupo = ?";

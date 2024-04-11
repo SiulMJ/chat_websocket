@@ -27,10 +27,6 @@
       background-color: #f9f9f9;
     }
 
-    #chatSection {
-      display: none;
-    }
-
     input[type="text"], input[type="password"], button, select {
       display: block;
       margin: 10px 0;
@@ -133,7 +129,7 @@ socket.onmessage = (event) => {
         channelSelect.remove(i);
       }
     }
- } else {
+  } else {
     appendMessage(message);
   }
 };
@@ -225,25 +221,12 @@ function eliminar() {
   }
 }
 
-
     function appendMessage(message) {
       const chatContainer = document.getElementById("chat");
       const messageElement = document.createElement("div");
       messageElement.textContent = message;
       chatContainer.appendChild(messageElement);
     }
-
-    // Manejar el evento de envío del formulario de inicio de sesión
-    document.getElementById("loginForm").addEventListener("submit", function(event) {
-      event.preventDefault(); // Evita que el formulario se envíe de forma predeterminada
-
-      const usernameInput = document.getElementById("usernameInput").value.trim();
-      const passwordInput = document.getElementById("passwordInput").value.trim();
-
-      // Enviar datos de inicio de sesión al servidor a través del WebSocket
-      const loginData = JSON.stringify({ action: "login", username: usernameInput, password: passwordInput });
-      socket.send(loginData);
-    });
 
     function displayGroups(groupsData) {
       const channelSelect = document.getElementById("channelSelect");
