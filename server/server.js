@@ -249,42 +249,49 @@ function createChannel(socket, channelName) {
 
 
 function sendMessageToChannel(socket, channelName, message) {
-  const groupId = socket.groupId;
   const username = socket.username;
-  
-  const sql = `SELECT * FROM grupos WHERE groupname = ?`;
-  con.query(sql, [channelName], (err, result) => {
+  const userId = socket.userId;
+
+  // Consultar la base de datos para obtener el ID del grupo basado en el nombre del grupo
+  const sqlGroupCheck = `SELECT id_grupo FROM grupos WHERE groupname = ?`;
+  con.query(sqlGroupCheck, [channelName], (err, result) => {
     if (err) {
-      console.error("Error al enviar mensaje al canal:", err);
+      console.error("Error al buscar el grupo:", err);
       return;
     }
     
     if (result.length > 0) {
-      const formattedMessage = `Mensaje de ${username}: ${message}`;
+      const groupId = result[0].id_grupo;
+
+      // Formato del mensaje a enviar
+      const formattedMessage = `Mensaje de ${username} en ${channelName}: ${message}`;
       
-      // Recorrer todos los clientes conectados al WebSocket y enviar el mensaje
+      // Recorrer todos los clientes conectados al WebSocket
       server.clients.forEach((client) => {
-        if (client.readyState === WebSocket.OPEN) {
+        //agrenado al commit 
+        if (client.readyState === WebSocket.OPEN && client.groupId === groupId) {
+          // Enviar mensaje solo a clientes que pertenecen al mismo grupo
           client.send(formattedMessage);
-          console.log(formattedMessage);
+          console.log("Mensaje enviado a:", client.username);
         }
+      });
+
+      // Insertar el mensaje en la base de datos
+      const sqlInsertMessage = `INSERT INTO mensajes (id_usuario, id_grupo, mensaje) VALUES (?, ?, ?)`;
+      con.query(sqlInsertMessage, [userId, groupId, message], (err, result) => {
+        if (err) {
+          console.error("Error al insertar mensaje en la base de datos:", err);
+          return;
+        }
+    
+        console.log("Mensaje insertado correctamente en la base de datos");
       });
     } else {
       console.log(`El canal '${channelName}' no existe`);
     }
   });
-  const userId = socket.userId
-  const insertu = `INSERT INTO mensajes (id_usuario, id_grupo, mensaje) VALUES (?, ?, ?)`;
-  con.query(insertu, [userId, groupId, message], (err, result) => {
-    if (err) {
-      console.error("Error al insertar mensaje en la base de datos:", err);
-      return;
-    }
-  
-    console.log("Mensaje insertado correctamente en la base de datos");
-  });
-  
 }
+
 
 function obtenerUsuarios(socket, channelName) {
   const userId = socket.userId;
@@ -322,8 +329,9 @@ function insertUsersToDatabase(socket, selectedUserIds) {
   const userIds = selectedUserIds.split(',').map(userId => parseInt(userId.trim(), 10));
   console.log(userIds);
 
+
   // Construir la consulta SQL para UD los usuarios en el grupo
-  const updateQuery = "UPDATE grupos SET id_miembros = ? WHERE id_grupo = ?";
+  const updateQuery = "INSERT into grupos (id_miembros, id_grupo) VALUES (?, ?)";
   const values = [userIds.join(',')];
 
   con.query(updateQuery, [values,groupId], (err, result) => {
