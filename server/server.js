@@ -268,7 +268,7 @@ function sendMessageToChannel(socket, channelName, message) {
       
       // Recorrer todos los clientes conectados al WebSocket
       server.clients.forEach((client) => {
-        //agrenado al commit 
+        //agregando al commit new 
         if (client.readyState === WebSocket.OPEN && client.groupId === groupId) {
           // Enviar mensaje solo a clientes que pertenecen al mismo grupo
           client.send(formattedMessage);
